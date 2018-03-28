@@ -46,6 +46,8 @@ _testmain.go
 *.exe
 
 profile
+.idea
+*.iml
 
 # vim stuff
 *.sw[op]
