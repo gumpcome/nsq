@@ -20,6 +20,7 @@ _posts
 *.dat
 .idea
 *.iml
+Godeps
 # Go.gitignore
 
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
