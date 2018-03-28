@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -18,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/serf/serf"
 	"github.com/julienschmidt/httprouter"
 	"github.com/gumpcome/nsq/internal/http_api"
 	"github.com/gumpcome/nsq/internal/protocol"
@@ -48,12 +46,12 @@ func newHTTPServer(ctx *context, tlsEnabled bool, tlsRequired bool) *httpServer 
 	}
 
 	router.Handle("GET", "/ping", http_api.Decorate(s.pingHandler, log, http_api.PlainText))
+	router.Handle("GET", "/info", http_api.Decorate(s.doInfo, log, http_api.V1))
 
 	// v1 negotiate
-	router.Handle("POST", "/pub", http_api.Decorate(s.doPUB, http_api.NegotiateVersion))
-	router.Handle("POST", "/mpub", http_api.Decorate(s.doMPUB, http_api.NegotiateVersion))
-	router.Handle("GET", "/stats", http_api.Decorate(s.doStats, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/lookup", http_api.Decorate(s.doLookup, log, http_api.NegotiateVersion))
+	router.Handle("POST", "/pub", http_api.Decorate(s.doPUB, http_api.V1))
+	router.Handle("POST", "/mpub", http_api.Decorate(s.doMPUB, http_api.V1))
+	router.Handle("GET", "/stats", http_api.Decorate(s.doStats, log, http_api.V1))
 
 	// only v1
 	router.Handle("POST", "/topic/create", http_api.Decorate(s.doCreateTopic, log, http_api.V1))
@@ -68,31 +66,6 @@ func newHTTPServer(ctx *context, tlsEnabled bool, tlsRequired bool) *httpServer 
 	router.Handle("POST", "/channel/unpause", http_api.Decorate(s.doPauseChannel, log, http_api.V1))
 	router.Handle("GET", "/config/:opt", http_api.Decorate(s.doConfig, log, http_api.V1))
 	router.Handle("PUT", "/config/:opt", http_api.Decorate(s.doConfig, log, http_api.V1))
-
-	// deprecated, v1 negotiate
-	router.Handle("POST", "/put", http_api.Decorate(s.doPUB, http_api.NegotiateVersion))
-	router.Handle("POST", "/mput", http_api.Decorate(s.doMPUB, http_api.NegotiateVersion))
-	router.Handle("GET", "/info", http_api.Decorate(s.doInfo, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/create_topic", http_api.Decorate(s.doCreateTopic, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/delete_topic", http_api.Decorate(s.doDeleteTopic, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/empty_topic", http_api.Decorate(s.doEmptyTopic, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/pause_topic", http_api.Decorate(s.doPauseTopic, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/unpause_topic", http_api.Decorate(s.doPauseTopic, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/create_channel", http_api.Decorate(s.doCreateChannel, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/delete_channel", http_api.Decorate(s.doDeleteChannel, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/empty_channel", http_api.Decorate(s.doEmptyChannel, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/pause_channel", http_api.Decorate(s.doPauseChannel, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/unpause_channel", http_api.Decorate(s.doPauseChannel, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/create_topic", http_api.Decorate(s.doCreateTopic, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/delete_topic", http_api.Decorate(s.doDeleteTopic, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/empty_topic", http_api.Decorate(s.doEmptyTopic, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/pause_topic", http_api.Decorate(s.doPauseTopic, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/unpause_topic", http_api.Decorate(s.doPauseTopic, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/create_channel", http_api.Decorate(s.doCreateChannel, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/delete_channel", http_api.Decorate(s.doDeleteChannel, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/empty_channel", http_api.Decorate(s.doEmptyChannel, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/pause_channel", http_api.Decorate(s.doPauseChannel, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/unpause_channel", http_api.Decorate(s.doPauseChannel, log, http_api.NegotiateVersion))
 
 	// debug
 	router.HandlerFunc("GET", "/debug/pprof/", pprof.Index)
@@ -122,7 +95,10 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if !s.tlsEnabled && s.tlsRequired {
 		resp := fmt.Sprintf(`{"message": "TLS_REQUIRED", "https_port": %d}`,
 			s.ctx.nsqd.RealHTTPSAddr().Port)
-		http_api.Respond(w, 403, "", resp)
+		w.Header().Set("X-NSQ-Content-Type", "nsq; version=1.0")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+		io.WriteString(w, resp)
 		return
 	}
 	s.router.ServeHTTP(w, req)
@@ -132,9 +108,6 @@ func (s *httpServer) pingHandler(w http.ResponseWriter, req *http.Request, ps ht
 	health := s.ctx.nsqd.GetHealth()
 	if !s.ctx.nsqd.IsHealthy() {
 		return nil, http_api.Err{500, health}
-	}
-	if s.ctx.nsqd.serf != nil && (s.ctx.nsqd.serf.State() == serf.SerfAlive || len(s.ctx.nsqd.serf.Members()) < 2) {
-		return nil, http_api.Err{500, "NOK - gossip unhealthy"}
 	}
 	return health, nil
 }
@@ -201,36 +174,6 @@ func (s *httpServer) getTopicFromQuery(req *http.Request) (url.Values, *Topic, e
 	return reqParams, s.ctx.nsqd.GetTopic(topicName), nil
 }
 
-func (s *httpServer) doLookup(w http.ResponseWriter, req *http.Request, ps httprouter.Params) (interface{}, error) {
-	if s.ctx.nsqd.serf == nil || s.ctx.nsqd.serf.State() != serf.SerfAlive {
-		return nil, http_api.Err{400, "GOSSIP_NOT_ENABLED"}
-	}
-
-	reqParams, err := http_api.NewReqParams(req)
-	if err != nil {
-		return nil, http_api.Err{400, "INVALID_REQUEST"}
-	}
-
-	topicName, err := reqParams.Get("topic")
-	if err != nil {
-		return nil, http_api.Err{400, "MISSING_ARG_TOPIC"}
-	}
-
-	registration := s.ctx.nsqd.rdb.FindRegistrations("topic", topicName, "")
-	if len(registration) == 0 {
-		return nil, http_api.Err{404, "INVALID_TOPIC"}
-	}
-
-	channels := s.ctx.nsqd.rdb.FindRegistrations("channel", topicName, "*").SubKeys()
-	producers := s.ctx.nsqd.rdb.FindProducers("topic", topicName, "")
-	producers = producers.FilterByActive(300*time.Second, 45*time.Second)
-	data := make(map[string]interface{})
-	data["channels"] = channels
-	data["producers"] = producers
-
-	return data, nil
-}
-
 func (s *httpServer) doPUB(w http.ResponseWriter, req *http.Request, ps httprouter.Params) (interface{}, error) {
 	// TODO: one day I'd really like to just error on chunked requests
 	// to be able to fail "too big" requests before we even read
@@ -271,7 +214,7 @@ func (s *httpServer) doPUB(w http.ResponseWriter, req *http.Request, ps httprout
 		}
 	}
 
-	msg := NewMessage(<-s.ctx.nsqd.idChan, body)
+	msg := NewMessage(topic.GenerateID(), body)
 	msg.deferred = deferred
 	err = topic.PutMessage(msg)
 	if err != nil {
@@ -300,8 +243,8 @@ func (s *httpServer) doMPUB(w http.ResponseWriter, req *http.Request, ps httprou
 	_, ok := reqParams["binary"]
 	if ok {
 		tmp := make([]byte, 4)
-		msgs, err = readMPUB(req.Body, tmp, s.ctx.nsqd.idChan,
-			s.ctx.nsqd.getOpts().MaxMsgSize)
+		msgs, err = readMPUB(req.Body, tmp, topic,
+			s.ctx.nsqd.getOpts().MaxMsgSize, s.ctx.nsqd.getOpts().MaxBodySize)
 		if err != nil {
 			return nil, http_api.Err{413, err.(*protocol.FatalClientErr).Code[2:]}
 		}
@@ -339,7 +282,7 @@ func (s *httpServer) doMPUB(w http.ResponseWriter, req *http.Request, ps httprou
 				return nil, http_api.Err{413, "MSG_TOO_BIG"}
 			}
 
-			msg := NewMessage(<-s.ctx.nsqd.idChan, block)
+			msg := NewMessage(topic.GenerateID(), block)
 			msgs = append(msgs, msg)
 		}
 	}
@@ -552,13 +495,8 @@ func (s *httpServer) doStats(w http.ResponseWriter, req *http.Request, ps httpro
 		}
 	}
 
-	var serfStats map[string]string
-	if s.ctx.nsqd.serf != nil {
-		serfStats = s.ctx.nsqd.serf.Stats()
-	}
-
 	if !jsonFormat {
-		return s.printStats(stats, health, startTime, uptime, serfStats), nil
+		return s.printStats(stats, health, startTime, uptime), nil
 	}
 
 	return struct {
@@ -569,17 +507,18 @@ func (s *httpServer) doStats(w http.ResponseWriter, req *http.Request, ps httpro
 	}{version.Binary, health, startTime.Unix(), stats}, nil
 }
 
-func (s *httpServer) printStats(stats []TopicStats, health string, startTime time.Time, uptime time.Duration, gossip map[string]string) []byte {
-	w := &bytes.Buffer{}
+func (s *httpServer) printStats(stats []TopicStats, health string, startTime time.Time, uptime time.Duration) []byte {
+	var buf bytes.Buffer
+	w := &buf
 	now := time.Now()
-	fmt.Fprintf(w, "%s\n", version.String("nsqd"))
-	fmt.Fprintf(w, "start_time %v\n", startTime.Format(time.RFC3339))
-	fmt.Fprintf(w, "uptime %s\n", uptime)
+	io.WriteString(w, fmt.Sprintf("%s\n", version.String("nsqd")))
+	io.WriteString(w, fmt.Sprintf("start_time %v\n", startTime.Format(time.RFC3339)))
+	io.WriteString(w, fmt.Sprintf("uptime %s\n", uptime))
 	if len(stats) == 0 {
-		w.WriteString("\nNO_TOPICS\n")
-		return w.Bytes()
+		io.WriteString(w, "\nNO_TOPICS\n")
+		return buf.Bytes()
 	}
-	fmt.Fprintf(w, "\nHealth: %s\n", health)
+	io.WriteString(w, fmt.Sprintf("\nHealth: %s\n", health))
 	for _, t := range stats {
 		var pausedPrefix string
 		if t.Paused {
@@ -587,39 +526,38 @@ func (s *httpServer) printStats(stats []TopicStats, health string, startTime tim
 		} else {
 			pausedPrefix = "   "
 		}
-		fmt.Fprintf(w, "\n%s[%-15s] depth: %-5d be-depth: %-5d msgs: %-8d e2e%%: %s\n",
+		io.WriteString(w, fmt.Sprintf("\n%s[%-15s] depth: %-5d be-depth: %-5d msgs: %-8d e2e%%: %s\n",
 			pausedPrefix,
 			t.TopicName,
 			t.Depth,
 			t.BackendDepth,
 			t.MessageCount,
-			t.E2eProcessingLatency)
+			t.E2eProcessingLatency))
 		for _, c := range t.Channels {
 			if c.Paused {
 				pausedPrefix = "   *P "
 			} else {
 				pausedPrefix = "      "
 			}
-			fmt.Fprintf(w,
-				"%s[%-25s] depth: %-5d be-depth: %-5d inflt: %-4d def: %-4d re-q: %-5d timeout: %-5d msgs: %-8d e2e%%: %s\n",
-				pausedPrefix,
-				c.ChannelName,
-				c.Depth,
-				c.BackendDepth,
-				c.InFlightCount,
-				c.DeferredCount,
-				c.RequeueCount,
-				c.TimeoutCount,
-				c.MessageCount,
-				c.E2eProcessingLatency)
+			io.WriteString(w,
+				fmt.Sprintf("%s[%-25s] depth: %-5d be-depth: %-5d inflt: %-4d def: %-4d re-q: %-5d timeout: %-5d msgs: %-8d e2e%%: %s\n",
+					pausedPrefix,
+					c.ChannelName,
+					c.Depth,
+					c.BackendDepth,
+					c.InFlightCount,
+					c.DeferredCount,
+					c.RequeueCount,
+					c.TimeoutCount,
+					c.MessageCount,
+					c.E2eProcessingLatency))
 			for _, client := range c.Clients {
 				connectTime := time.Unix(client.ConnectTime, 0)
 				// truncate to the second
 				duration := time.Duration(int64(now.Sub(connectTime).Seconds())) * time.Second
-				_, port, _ := net.SplitHostPort(client.RemoteAddress)
-				fmt.Fprintf(w, "        [%s %-21s] state: %d inflt: %-4d rdy: %-4d fin: %-8d re-q: %-8d msgs: %-8d connected: %s\n",
+				io.WriteString(w, fmt.Sprintf("        [%s %-21s] state: %d inflt: %-4d rdy: %-4d fin: %-8d re-q: %-8d msgs: %-8d connected: %s\n",
 					client.Version,
-					fmt.Sprintf("%s:%s", client.Name, port),
+					client.ClientID,
 					client.State,
 					client.InFlightCount,
 					client.ReadyCount,
@@ -627,19 +565,11 @@ func (s *httpServer) printStats(stats []TopicStats, health string, startTime tim
 					client.RequeueCount,
 					client.MessageCount,
 					duration,
-				)
+				))
 			}
 		}
 	}
-
-	if gossip != nil {
-		fmt.Fprintf(w, "\nGossip:\n")
-		for k, v := range gossip {
-			fmt.Fprintf(w, "   %s: %s\n", k, v)
-		}
-	}
-
-	return w.Bytes()
+	return buf.Bytes()
 }
 
 func (s *httpServer) doConfig(w http.ResponseWriter, req *http.Request, ps httprouter.Params) (interface{}, error) {

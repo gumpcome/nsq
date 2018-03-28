@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/pprof"
+	"sync/atomic"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/gumpcome/nsq/internal/http_api"
 	"github.com/gumpcome/nsq/internal/protocol"
-	"github.com/gumpcome/nsq/internal/registrationdb"
 	"github.com/gumpcome/nsq/internal/version"
 )
 
@@ -31,13 +31,14 @@ func newHTTPServer(ctx *Context) *httpServer {
 	}
 
 	router.Handle("GET", "/ping", http_api.Decorate(s.pingHandler, log, http_api.PlainText))
+	router.Handle("GET", "/info", http_api.Decorate(s.doInfo, log, http_api.V1))
 
 	// v1 negotiate
-	router.Handle("GET", "/debug", http_api.Decorate(s.doDebug, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/lookup", http_api.Decorate(s.doLookup, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/topics", http_api.Decorate(s.doTopics, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/channels", http_api.Decorate(s.doChannels, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/nodes", http_api.Decorate(s.doNodes, log, http_api.NegotiateVersion))
+	router.Handle("GET", "/debug", http_api.Decorate(s.doDebug, log, http_api.V1))
+	router.Handle("GET", "/lookup", http_api.Decorate(s.doLookup, log, http_api.V1))
+	router.Handle("GET", "/topics", http_api.Decorate(s.doTopics, log, http_api.V1))
+	router.Handle("GET", "/channels", http_api.Decorate(s.doChannels, log, http_api.V1))
+	router.Handle("GET", "/nodes", http_api.Decorate(s.doNodes, log, http_api.V1))
 
 	// only v1
 	router.Handle("POST", "/topic/create", http_api.Decorate(s.doCreateTopic, log, http_api.V1))
@@ -45,19 +46,6 @@ func newHTTPServer(ctx *Context) *httpServer {
 	router.Handle("POST", "/channel/create", http_api.Decorate(s.doCreateChannel, log, http_api.V1))
 	router.Handle("POST", "/channel/delete", http_api.Decorate(s.doDeleteChannel, log, http_api.V1))
 	router.Handle("POST", "/topic/tombstone", http_api.Decorate(s.doTombstoneTopicProducer, log, http_api.V1))
-
-	// deprecated, v1 negotiate
-	router.Handle("GET", "/info", http_api.Decorate(s.doInfo, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/create_topic", http_api.Decorate(s.doCreateTopic, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/delete_topic", http_api.Decorate(s.doDeleteTopic, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/create_channel", http_api.Decorate(s.doCreateChannel, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/delete_channel", http_api.Decorate(s.doDeleteChannel, log, http_api.NegotiateVersion))
-	router.Handle("POST", "/tombstone_topic_producer", http_api.Decorate(s.doTombstoneTopicProducer, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/create_topic", http_api.Decorate(s.doCreateTopic, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/delete_topic", http_api.Decorate(s.doDeleteTopic, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/create_channel", http_api.Decorate(s.doCreateChannel, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/delete_channel", http_api.Decorate(s.doDeleteChannel, log, http_api.NegotiateVersion))
-	router.Handle("GET", "/tombstone_topic_producer", http_api.Decorate(s.doTombstoneTopicProducer, log, http_api.NegotiateVersion))
 
 	// debug
 	router.HandlerFunc("GET", "/debug/pprof", pprof.Index)
@@ -135,7 +123,7 @@ func (s *httpServer) doLookup(w http.ResponseWriter, req *http.Request, ps httpr
 		s.ctx.nsqlookupd.opts.TombstoneLifetime)
 	return map[string]interface{}{
 		"channels":  channels,
-		"producers": producers,
+		"producers": producers.PeerInfo(),
 	}, nil
 }
 
@@ -155,8 +143,7 @@ func (s *httpServer) doCreateTopic(w http.ResponseWriter, req *http.Request, ps 
 	}
 
 	s.ctx.nsqlookupd.logf("DB: adding topic(%s)", topicName)
-
-	key := registrationdb.Registration{"topic", topicName, ""}
+	key := Registration{"topic", topicName, ""}
 	s.ctx.nsqlookupd.DB.AddRegistration(key)
 
 	return nil, nil
@@ -207,7 +194,7 @@ func (s *httpServer) doTombstoneTopicProducer(w http.ResponseWriter, req *http.R
 	s.ctx.nsqlookupd.logf("DB: setting tombstone for producer@%s of topic(%s)", node, topicName)
 	producers := s.ctx.nsqlookupd.DB.FindProducers("topic", topicName, "")
 	for _, p := range producers {
-		thisNode := fmt.Sprintf("%s:%d", p.PeerInfo.BroadcastAddress, p.PeerInfo.HTTPPort)
+		thisNode := fmt.Sprintf("%s:%d", p.peerInfo.BroadcastAddress, p.peerInfo.HTTPPort)
 		if thisNode == node {
 			p.Tombstone()
 		}
@@ -228,11 +215,11 @@ func (s *httpServer) doCreateChannel(w http.ResponseWriter, req *http.Request, p
 	}
 
 	s.ctx.nsqlookupd.logf("DB: adding channel(%s) in topic(%s)", channelName, topicName)
-	key := registrationdb.Registration{"channel", topicName, channelName}
+	key := Registration{"channel", topicName, channelName}
 	s.ctx.nsqlookupd.DB.AddRegistration(key)
 
 	s.ctx.nsqlookupd.logf("DB: adding topic(%s)", topicName)
-	key = registrationdb.Registration{"topic", topicName, ""}
+	key = Registration{"topic", topicName, ""}
 	s.ctx.nsqlookupd.DB.AddRegistration(key)
 
 	return nil, nil
@@ -279,7 +266,7 @@ func (s *httpServer) doNodes(w http.ResponseWriter, req *http.Request, ps httpro
 		s.ctx.nsqlookupd.opts.InactiveProducerTimeout, 0)
 	nodes := make([]*node, len(producers))
 	for i, p := range producers {
-		topics := s.ctx.nsqlookupd.DB.LookupRegistrations(p.PeerInfo.ID).Filter("topic", "*", "").Keys()
+		topics := s.ctx.nsqlookupd.DB.LookupRegistrations(p.peerInfo.id).Filter("topic", "*", "").Keys()
 
 		// for each topic find the producer that matches this peer
 		// to add tombstone information
@@ -287,19 +274,19 @@ func (s *httpServer) doNodes(w http.ResponseWriter, req *http.Request, ps httpro
 		for j, t := range topics {
 			topicProducers := s.ctx.nsqlookupd.DB.FindProducers("topic", t, "")
 			for _, tp := range topicProducers {
-				if tp.PeerInfo == p.PeerInfo {
+				if tp.peerInfo == p.peerInfo {
 					tombstones[j] = tp.IsTombstoned(s.ctx.nsqlookupd.opts.TombstoneLifetime)
 				}
 			}
 		}
 
 		nodes[i] = &node{
-			RemoteAddress:    p.PeerInfo.RemoteAddress,
-			Hostname:         p.PeerInfo.Hostname,
-			BroadcastAddress: p.PeerInfo.BroadcastAddress,
-			TCPPort:          p.PeerInfo.TCPPort,
-			HTTPPort:         p.PeerInfo.HTTPPort,
-			Version:          p.PeerInfo.Version,
+			RemoteAddress:    p.peerInfo.RemoteAddress,
+			Hostname:         p.peerInfo.Hostname,
+			BroadcastAddress: p.peerInfo.BroadcastAddress,
+			TCPPort:          p.peerInfo.TCPPort,
+			HTTPPort:         p.peerInfo.HTTPPort,
+			Version:          p.peerInfo.Version,
 			Tombstones:       tombstones,
 			Topics:           topics,
 		}
@@ -311,5 +298,27 @@ func (s *httpServer) doNodes(w http.ResponseWriter, req *http.Request, ps httpro
 }
 
 func (s *httpServer) doDebug(w http.ResponseWriter, req *http.Request, ps httprouter.Params) (interface{}, error) {
-	return s.ctx.nsqlookupd.DB.Debug(), nil
+	s.ctx.nsqlookupd.DB.RLock()
+	defer s.ctx.nsqlookupd.DB.RUnlock()
+
+	data := make(map[string][]map[string]interface{})
+	for r, producers := range s.ctx.nsqlookupd.DB.registrationMap {
+		key := r.Category + ":" + r.Key + ":" + r.SubKey
+		for _, p := range producers {
+			m := map[string]interface{}{
+				"id":                p.peerInfo.id,
+				"hostname":          p.peerInfo.Hostname,
+				"broadcast_address": p.peerInfo.BroadcastAddress,
+				"tcp_port":          p.peerInfo.TCPPort,
+				"http_port":         p.peerInfo.HTTPPort,
+				"version":           p.peerInfo.Version,
+				"last_update":       atomic.LoadInt64(&p.peerInfo.lastUpdate),
+				"tombstoned":        p.tombstoned,
+				"tombstoned_at":     p.tombstonedAt.UnixNano(),
+			}
+			data[key] = append(data[key], m)
+		}
+	}
+
+	return data, nil
 }

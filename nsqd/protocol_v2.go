@@ -206,7 +206,8 @@ func (p *protocolV2) Exec(client *clientV2, params [][]byte) ([]byte, error) {
 func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 	var err error
 	var buf bytes.Buffer
-	var clientMsgChan chan *Message
+	var memoryMsgChan chan *Message
+	var backendMsgChan chan []byte
 	var subChannel *Channel
 	// NOTE: `flusherChan` is used to bound message latency for
 	// the pathological case of a channel on a low volume topic
@@ -236,7 +237,8 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 	for {
 		if subChannel == nil || !client.IsReadyForMessages() {
 			// the client is not ready to receive messages...
-			clientMsgChan = nil
+			memoryMsgChan = nil
+			backendMsgChan = nil
 			flusherChan = nil
 			// force flush
 			client.writeLock.Lock()
@@ -249,12 +251,14 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 		} else if flushed {
 			// last iteration we flushed...
 			// do not select on the flusher ticker channel
-			clientMsgChan = subChannel.clientMsgChan
+			memoryMsgChan = subChannel.memoryMsgChan
+			backendMsgChan = subChannel.backend.ReadChan()
 			flusherChan = nil
 		} else {
 			// we're buffered (if there isn't any more data we should flush)...
 			// select on the flusher ticker channel, too
-			clientMsgChan = subChannel.clientMsgChan
+			memoryMsgChan = subChannel.memoryMsgChan
+			backendMsgChan = subChannel.backend.ReadChan()
 			flusherChan = outputBufferTicker.C
 		}
 
@@ -300,14 +304,30 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			if err != nil {
 				goto exit
 			}
-		case msg, ok := <-clientMsgChan:
-			if !ok {
-				goto exit
-			}
-
+		case b := <-backendMsgChan:
 			if sampleRate > 0 && rand.Int31n(100) > sampleRate {
 				continue
 			}
+
+			msg, err := decodeMessage(b)
+			if err != nil {
+				p.ctx.nsqd.logf("ERROR: failed to decode message - %s", err)
+				continue
+			}
+			msg.Attempts++
+
+			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout)
+			client.SendingMessage()
+			err = p.SendMessage(client, msg, &buf)
+			if err != nil {
+				goto exit
+			}
+			flushed = false
+		case msg := <-memoryMsgChan:
+			if sampleRate > 0 && rand.Int31n(100) > sampleRate {
+				continue
+			}
+			msg.Attempts++
 
 			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout)
 			client.SendingMessage()
@@ -761,7 +781,7 @@ func (p *protocolV2) PUB(client *clientV2, params [][]byte) ([]byte, error) {
 	}
 
 	topic := p.ctx.nsqd.GetTopic(topicName)
-	msg := NewMessage(<-p.ctx.nsqd.idChan, messageBody)
+	msg := NewMessage(topic.GenerateID(), messageBody)
 	err = topic.PutMessage(msg)
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(err, "E_PUB_FAILED", "PUB failed "+err.Error())
@@ -783,6 +803,12 @@ func (p *protocolV2) MPUB(client *clientV2, params [][]byte) ([]byte, error) {
 			fmt.Sprintf("E_BAD_TOPIC MPUB topic name %q is not valid", topicName))
 	}
 
+	if err := p.CheckAuth(client, "MPUB", topicName, ""); err != nil {
+		return nil, err
+	}
+
+	topic := p.ctx.nsqd.GetTopic(topicName)
+
 	bodyLen, err := readLen(client.Reader, client.lenSlice)
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(err, "E_BAD_BODY", "MPUB failed to read body size")
@@ -798,17 +824,11 @@ func (p *protocolV2) MPUB(client *clientV2, params [][]byte) ([]byte, error) {
 			fmt.Sprintf("MPUB body too big %d > %d", bodyLen, p.ctx.nsqd.getOpts().MaxBodySize))
 	}
 
-	messages, err := readMPUB(client.Reader, client.lenSlice, p.ctx.nsqd.idChan,
-		p.ctx.nsqd.getOpts().MaxMsgSize)
+	messages, err := readMPUB(client.Reader, client.lenSlice, topic,
+		p.ctx.nsqd.getOpts().MaxMsgSize, p.ctx.nsqd.getOpts().MaxBodySize)
 	if err != nil {
 		return nil, err
 	}
-
-	if err := p.CheckAuth(client, "MPUB", topicName, ""); err != nil {
-		return nil, err
-	}
-
-	topic := p.ctx.nsqd.GetTopic(topicName)
 
 	// if we've made it this far we've validated all the input,
 	// the only possible error is that the topic is exiting during
@@ -873,7 +893,7 @@ func (p *protocolV2) DPUB(client *clientV2, params [][]byte) ([]byte, error) {
 	}
 
 	topic := p.ctx.nsqd.GetTopic(topicName)
-	msg := NewMessage(<-p.ctx.nsqd.idChan, messageBody)
+	msg := NewMessage(topic.GenerateID(), messageBody)
 	msg.deferred = timeoutDuration
 	err = topic.PutMessage(msg)
 	if err != nil {
@@ -910,13 +930,15 @@ func (p *protocolV2) TOUCH(client *clientV2, params [][]byte) ([]byte, error) {
 	return nil, nil
 }
 
-func readMPUB(r io.Reader, tmp []byte, idChan chan MessageID, maxMessageSize int64) ([]*Message, error) {
+func readMPUB(r io.Reader, tmp []byte, topic *Topic, maxMessageSize int64, maxBodySize int64) ([]*Message, error) {
 	numMessages, err := readLen(r, tmp)
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(err, "E_BAD_BODY", "MPUB failed to read message count")
 	}
 
-	if numMessages <= 0 {
+	// 4 == total num, 5 == length + min 1
+	maxMessages := (maxBodySize - 4) / 5
+	if numMessages <= 0 || int64(numMessages) > maxMessages {
 		return nil, protocol.NewFatalClientErr(err, "E_BAD_BODY",
 			fmt.Sprintf("MPUB invalid message count %d", numMessages))
 	}
@@ -945,7 +967,7 @@ func readMPUB(r io.Reader, tmp []byte, idChan chan MessageID, maxMessageSize int
 			return nil, protocol.NewFatalClientErr(err, "E_BAD_MESSAGE", "MPUB failed to read message body")
 		}
 
-		messages = append(messages, NewMessage(<-idChan, msgBody))
+		messages = append(messages, NewMessage(topic.GenerateID(), msgBody))
 	}
 
 	return messages, nil

@@ -2,13 +2,11 @@ package nsqlookupd
 
 import (
 	"net"
-
-	"github.com/gumpcome/nsq/internal/registrationdb"
 )
 
 type ClientV1 struct {
 	net.Conn
-	peerInfo *registrationdb.PeerInfo
+	peerInfo *PeerInfo
 }
 
 func NewClientV1(conn net.Conn) *ClientV1 {

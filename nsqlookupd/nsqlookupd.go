@@ -2,13 +2,13 @@ package nsqlookupd
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"sync"
 
 	"github.com/gumpcome/nsq/internal/http_api"
 	"github.com/gumpcome/nsq/internal/protocol"
-	"github.com/gumpcome/nsq/internal/registrationdb"
 	"github.com/gumpcome/nsq/internal/util"
 	"github.com/gumpcome/nsq/internal/version"
 )
@@ -19,22 +19,22 @@ type NSQLookupd struct {
 	tcpListener  net.Listener
 	httpListener net.Listener
 	waitGroup    util.WaitGroupWrapper
-	DB           *registrationdb.RegistrationDB
+	DB           *RegistrationDB
 }
 
 func New(opts *Options) *NSQLookupd {
+	if opts.Logger == nil {
+		opts.Logger = log.New(os.Stderr, opts.LogPrefix, log.Ldate|log.Ltime|log.Lmicroseconds)
+	}
 	n := &NSQLookupd{
 		opts: opts,
-		DB:   registrationdb.New(),
+		DB:   NewRegistrationDB(),
 	}
 	n.logf(version.String("nsqlookupd"))
 	return n
 }
 
 func (l *NSQLookupd) logf(f string, args ...interface{}) {
-	if l.opts.Logger == nil {
-		return
-	}
 	l.opts.Logger.Output(2, fmt.Sprintf(f, args...))
 }
 
