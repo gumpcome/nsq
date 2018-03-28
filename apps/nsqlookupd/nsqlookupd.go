@@ -11,8 +11,8 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/judwhite/go-svc/svc"
 	"github.com/mreiferson/go-options"
-	"github.com/nsqio/nsq/internal/version"
-	"github.com/nsqio/nsq/nsqlookupd"
+	"github.com/gumpcome/nsq/internal/version"
+	"github.com/gumpcome/nsq/nsqlookupd"
 )
 
 func nsqlookupdFlagSet(opts *nsqlookupd.Options) *flag.FlagSet {

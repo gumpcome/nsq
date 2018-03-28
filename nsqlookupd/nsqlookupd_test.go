@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/nsqio/go-nsq"
-	"github.com/nsqio/nsq/internal/clusterinfo"
-	"github.com/nsqio/nsq/internal/http_api"
-	"github.com/nsqio/nsq/internal/test"
+	"github.com/gumpcome/nsq/internal/clusterinfo"
+	"github.com/gumpcome/nsq/internal/http_api"
+	"github.com/gumpcome/nsq/internal/test"
 )
 
 const (

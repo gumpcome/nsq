@@ -14,10 +14,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/nsqio/nsq/internal/http_api"
-	"github.com/nsqio/nsq/internal/lg"
-	"github.com/nsqio/nsq/internal/util"
-	"github.com/nsqio/nsq/internal/version"
+	"github.com/gumpcome/nsq/internal/http_api"
+	"github.com/gumpcome/nsq/internal/lg"
+	"github.com/gumpcome/nsq/internal/util"
+	"github.com/gumpcome/nsq/internal/version"
 )
 
 type NSQAdmin struct {

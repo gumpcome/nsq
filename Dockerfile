@@ -1,9 +1,9 @@
 FROM golang:latest AS build
 
-RUN mkdir -p /go/src/github.com/nsqio/nsq
-COPY . /go/src/github.com/nsqio/nsq
+RUN mkdir -p /go/src/github.com/gumpcome/nsq
+COPY . /go/src/github.com/gumpcome/nsq
 
-WORKDIR /go/src/github.com/nsqio/nsq
+WORKDIR /go/src/github.com/gumpcome/nsq
 
 RUN wget -O /bin/dep https://github.com/golang/dep/releases/download/v0.3.2/dep-linux-amd64 \
  && chmod +x /bin/dep \
