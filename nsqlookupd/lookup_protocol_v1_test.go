@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nsqio/nsq/internal/protocol"
-	"github.com/nsqio/nsq/internal/test"
+	"github.com/gumpcome/nsq/internal/protocol"
+	"github.com/gumpcome/nsq/internal/test"
 )
 
 func TestIOLoopReturnsClientErrWhenSendFails(t *testing.T) {

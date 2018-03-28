@@ -20,9 +20,9 @@ import (
 
 	"github.com/hashicorp/serf/serf"
 	"github.com/julienschmidt/httprouter"
-	"github.com/nsqio/nsq/internal/http_api"
-	"github.com/nsqio/nsq/internal/protocol"
-	"github.com/nsqio/nsq/internal/version"
+	"github.com/gumpcome/nsq/internal/http_api"
+	"github.com/gumpcome/nsq/internal/protocol"
+	"github.com/gumpcome/nsq/internal/version"
 )
 
 type httpServer struct {

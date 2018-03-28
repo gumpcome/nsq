@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/serf/serf"
-	"github.com/nsqio/nsq/internal/registrationdb"
-	"github.com/nsqio/nsq/internal/version"
+	"github.com/gumpcome/nsq/internal/registrationdb"
+	"github.com/gumpcome/nsq/internal/version"
 )
 
 type logWriter struct {

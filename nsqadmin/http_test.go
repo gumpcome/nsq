@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/nsqio/nsq/internal/version"
-	"github.com/nsqio/nsq/nsqd"
-	"github.com/nsqio/nsq/nsqlookupd"
+	"github.com/gumpcome/nsq/internal/version"
+	"github.com/gumpcome/nsq/nsqd"
+	"github.com/gumpcome/nsq/nsqlookupd"
 )
 
 type tbLog interface {

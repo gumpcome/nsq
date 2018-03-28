@@ -3,7 +3,7 @@ package nsqlookupd
 import (
 	"net"
 
-	"github.com/nsqio/nsq/internal/registrationdb"
+	"github.com/gumpcome/nsq/internal/registrationdb"
 )
 
 type ClientV1 struct {

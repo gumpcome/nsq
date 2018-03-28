@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/nsqio/nsq/internal/app"
+	"github.com/gumpcome/nsq/internal/app"
 )
 
 type TCPHandler interface {

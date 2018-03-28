@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/nsqio/go-nsq"
-	"github.com/nsqio/nsq/internal/version"
-	"github.com/nsqio/nsq/nsqlookupd"
+	"github.com/gumpcome/nsq/internal/version"
+	"github.com/gumpcome/nsq/nsqlookupd"
 )
 
 func TestHTTPput(t *testing.T) {

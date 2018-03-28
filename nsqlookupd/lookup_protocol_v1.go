@@ -13,9 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nsqio/nsq/internal/protocol"
-	"github.com/nsqio/nsq/internal/registrationdb"
-	"github.com/nsqio/nsq/internal/version"
+	"github.com/gumpcome/nsq/internal/protocol"
+	"github.com/gumpcome/nsq/internal/registrationdb"
+	"github.com/gumpcome/nsq/internal/version"
 )
 
 type LookupProtocolV1 struct {

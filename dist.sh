@@ -4,7 +4,7 @@
 # 2. tag that commit
 # 3. use dist.sh to produce tar.gz for linux and darwin
 # 4. upload *.tar.gz to our bitly s3 bucket
-# 5. docker push nsqio/nsq
+# 5. docker push gumpcome/nsq
 # 6. push to nsqio/master
 # 7. update the release metadata on github / upload the binaries there too
 # 8. update the gh-pages branch with versions / download links
@@ -47,8 +47,8 @@ for os in linux darwin freebsd windows; do
     rm -r $BUILD
 done
 
-docker build -t nsqio/nsq:v$version .
+docker build -t gumpcome/nsq:v$version .
 if [[ ! $version == *"-"* ]]; then
-    echo "Tagging nsqio/nsq:v$version as the latest release."
-    docker tag -f nsqio/nsq:v$version nsqio/nsq:latest
+    echo "Tagging gumpcome/nsq:v$version as the latest release."
+    docker tag -f gumpcome/nsq:v$version gumpcome/nsq:latest
 fi
