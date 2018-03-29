@@ -11,6 +11,7 @@ import (
 	"github.com/nsqio/go-diskqueue"
 	"github.com/gumpcome/nsq/internal/quantile"
 	"github.com/gumpcome/nsq/internal/util"
+	"github.com/gumpcome/nsq/internal/lg"
 )
 
 type Topic struct {
@@ -57,6 +58,10 @@ func NewTopic(topicName string, ctx *context, deleteCallback func(*Topic)) *Topi
 		t.ephemeral = true
 		t.backend = newDummyBackendQueue()
 	} else {
+		dqLogf := func(level diskqueue.LogLevel, f string, args ...interface{}) {
+			opts := ctx.nsqd.getOpts()
+			lg.Logf(opts.Logger, opts.logLevel, lg.LogLevel(level), f, args...)
+		}
 		t.backend = diskqueue.New(topicName,
 			ctx.nsqd.getOpts().DataPath,
 			ctx.nsqd.getOpts().MaxBytesPerFile,
@@ -64,7 +69,7 @@ func NewTopic(topicName string, ctx *context, deleteCallback func(*Topic)) *Topi
 			int32(ctx.nsqd.getOpts().MaxMsgSize)+minValidMsgLength,
 			ctx.nsqd.getOpts().SyncEvery,
 			ctx.nsqd.getOpts().SyncTimeout,
-			ctx.nsqd.getOpts().Logger)
+			dqLogf,)
 	}
 
 	t.waitGroup.Wrap(func() { t.messagePump() })

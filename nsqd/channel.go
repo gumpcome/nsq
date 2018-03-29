@@ -13,6 +13,7 @@ import (
 	"github.com/nsqio/go-diskqueue"
 	"github.com/gumpcome/nsq/internal/pqueue"
 	"github.com/gumpcome/nsq/internal/quantile"
+	"github.com/gumpcome/nsq/internal/lg"
 )
 
 type Consumer interface {
@@ -95,6 +96,10 @@ func NewChannel(topicName string, channelName string, ctx *context,
 		c.backend = newDummyBackendQueue()
 	} else {
 		// backend names, for uniqueness, automatically include the topic...
+		dqLogf := func(level diskqueue.LogLevel, f string, args ...interface{}) {
+			opts := ctx.nsqd.getOpts()
+			lg.Logf(opts.Logger, opts.logLevel, lg.LogLevel(level), f, args...)
+		}
 		backendName := getBackendName(topicName, channelName)
 		c.backend = diskqueue.New(backendName,
 			ctx.nsqd.getOpts().DataPath,
@@ -103,7 +108,7 @@ func NewChannel(topicName string, channelName string, ctx *context,
 			int32(ctx.nsqd.getOpts().MaxMsgSize)+minValidMsgLength,
 			ctx.nsqd.getOpts().SyncEvery,
 			ctx.nsqd.getOpts().SyncTimeout,
-			ctx.nsqd.getOpts().Logger)
+			dqLogf,)
 	}
 
 	c.ctx.nsqd.Notify(c)

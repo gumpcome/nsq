@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"github.com/gumpcome/nsq/internal/lg"
 )
 
 type Options struct {
@@ -75,6 +76,7 @@ type Options struct {
 	SnappyEnabled   bool `flag:"snappy"`
 
 	Logger Logger
+	logLevel  lg.LogLevel // private, not really an option
 }
 
 func NewOptions() *Options {
