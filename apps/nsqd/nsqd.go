@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/judwhite/go-svc/svc"
-	"github.com/mreiferson/go-options"
 	"github.com/gumpcome/nsq/internal/app"
 	"github.com/gumpcome/nsq/internal/version"
 	"github.com/gumpcome/nsq/nsqd"
+	"github.com/judwhite/go-svc/svc"
+	"github.com/mreiferson/go-options"
 )
 
 type tlsRequiredOption int

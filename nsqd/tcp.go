@@ -40,7 +40,7 @@ func (p *tcpServer) Handle(clientConn net.Conn) {
 		return
 	}
 
-	err = prot.IOLoop(clientConn)
+	err = prot.IOLoop(clientConn) //nsqd/protocol_v2.go
 	if err != nil {
 		p.ctx.nsqd.logf(LOG_ERROR, "client(%s) - %s", clientConn.RemoteAddr(), err)
 		return

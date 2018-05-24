@@ -17,11 +17,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/gumpcome/nsq/internal/http_api"
 	"github.com/gumpcome/nsq/internal/lg"
 	"github.com/gumpcome/nsq/internal/protocol"
 	"github.com/gumpcome/nsq/internal/version"
+	"github.com/julienschmidt/httprouter"
 )
 
 var boolParams = map[string]bool{

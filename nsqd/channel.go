@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nsqio/go-diskqueue"
 	"github.com/gumpcome/nsq/internal/lg"
 	"github.com/gumpcome/nsq/internal/pqueue"
 	"github.com/gumpcome/nsq/internal/quantile"
+	"github.com/nsqio/go-diskqueue"
 )
 
 type Consumer interface {
@@ -35,24 +35,24 @@ type Consumer interface {
 // messages, timeouts, requeuing, etc.
 type Channel struct {
 	// 64bit atomic vars need to be first for proper alignment on 32bit platforms
-	requeueCount uint64
-	messageCount uint64
-	timeoutCount uint64
+	requeueCount uint64 //重新入队的消息条目数
+	messageCount uint64 //进入 Channel 的消息总数
+	timeoutCount uint64 //超时的消息数
 
 	sync.RWMutex
 
-	topicName string
-	name      string
+	topicName string //对应的topic名称
+	name      string //channel名称
 	ctx       *context
 
-	backend BackendQueue
+	backend BackendQueue //消息备份队列
 
-	memoryMsgChan chan *Message
+	memoryMsgChan chan *Message //内存队列，消息进入 channel 的入口
 	exitFlag      int32
 	exitMutex     sync.RWMutex
 
 	// state tracking
-	clients        map[int64]Consumer
+	clients        map[int64]Consumer //cosumer
 	paused         int32
 	ephemeral      bool
 	deleteCallback func(*Channel)
@@ -62,11 +62,11 @@ type Channel struct {
 	e2eProcessingLatencyStream *quantile.Quantile
 
 	// TODO: these can be DRYd up
-	deferredMessages map[MessageID]*pqueue.Item
-	deferredPQ       pqueue.PriorityQueue
+	deferredMessages map[MessageID]*pqueue.Item //延迟消息
+	deferredPQ       pqueue.PriorityQueue       //延迟消息队列
 	deferredMutex    sync.Mutex
-	inFlightMessages map[MessageID]*Message
-	inFlightPQ       inFlightPqueue
+	inFlightMessages map[MessageID]*Message //待发送的消息
+	inFlightPQ       inFlightPqueue         //待发送的队列
 	inFlightMutex    sync.Mutex
 }
 
@@ -420,12 +420,12 @@ func (c *Channel) StartInFlightTimeout(msg *Message, clientID int64, timeout tim
 	now := time.Now()
 	msg.clientID = clientID
 	msg.deliveryTS = now
-	msg.pri = now.Add(timeout).UnixNano()
-	err := c.pushInFlightMessage(msg)
+	msg.pri = now.Add(timeout).UnixNano() //这里的 now 就是消息往客户端开始发送的时间点
+	err := c.pushInFlightMessage(msg)     //写到 hash 表
 	if err != nil {
 		return err
 	}
-	c.addToInFlightPQ(msg)
+	c.addToInFlightPQ(msg) //写到优先队列
 	return nil
 }
 
@@ -562,7 +562,7 @@ func (c *Channel) processInFlightQueue(t int64) bool {
 	dirty := false
 	for {
 		c.inFlightMutex.Lock()
-		msg, _ := c.inFlightPQ.PeekAndShift(t)
+		msg, _ := c.inFlightPQ.PeekAndShift(t) //根据超时拿出队列里面的消息
 		c.inFlightMutex.Unlock()
 
 		if msg == nil {
@@ -570,7 +570,7 @@ func (c *Channel) processInFlightQueue(t int64) bool {
 		}
 		dirty = true
 
-		_, err := c.popInFlightMessage(msg.clientID, msg.ID)
+		_, err := c.popInFlightMessage(msg.clientID, msg.ID) //删除 hash 表里面的消息
 		if err != nil {
 			goto exit
 		}

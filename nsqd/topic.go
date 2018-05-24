@@ -8,10 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nsqio/go-diskqueue"
 	"github.com/gumpcome/nsq/internal/lg"
 	"github.com/gumpcome/nsq/internal/quantile"
 	"github.com/gumpcome/nsq/internal/util"
+	"github.com/nsqio/go-diskqueue"
 )
 
 type Topic struct {
@@ -76,7 +76,7 @@ func NewTopic(topicName string, ctx *context, deleteCallback func(*Topic)) *Topi
 
 	t.waitGroup.Wrap(func() { t.messagePump() })
 
-	t.ctx.nsqd.Notify(t)
+	t.ctx.nsqd.Notify(t) //通知 nsqlookupd 注册这个 topic
 
 	return t
 }
@@ -273,13 +273,14 @@ func (t *Topic) messagePump() {
 		case <-t.exitChan:
 			goto exit
 		}
-
+		//将收到的消息复制到每一个channel
 		for i, channel := range chans {
 			chanMsg := msg
 			// copy the message because each channel
 			// needs a unique instance but...
 			// fastpath to avoid copy if its the first channel
 			// (the topic already created the first copy)
+			//多个channel会进行消息复制
 			if i > 0 {
 				chanMsg = NewMessage(msg.ID, msg.Body)
 				chanMsg.Timestamp = msg.Timestamp

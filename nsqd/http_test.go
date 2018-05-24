@@ -17,10 +17,10 @@ import (
 
 	"strings"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/gumpcome/nsq/internal/test"
 	"github.com/gumpcome/nsq/internal/version"
 	"github.com/gumpcome/nsq/nsqlookupd"
+	"github.com/nsqio/go-nsq"
 )
 
 type ErrMessage struct {

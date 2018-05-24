@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/gumpcome/nsq/internal/app"
 	"github.com/gumpcome/nsq/internal/version"
+	"github.com/nsqio/go-nsq"
 )
 
 var (

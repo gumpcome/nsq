@@ -18,10 +18,10 @@ import (
 
 	"github.com/bitly/go-hostpool"
 	"github.com/bitly/timer_metrics"
-	"github.com/nsqio/go-nsq"
 	"github.com/gumpcome/nsq/internal/app"
 	"github.com/gumpcome/nsq/internal/protocol"
 	"github.com/gumpcome/nsq/internal/version"
+	"github.com/nsqio/go-nsq"
 )
 
 const (

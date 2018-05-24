@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/gumpcome/nsq/internal/clusterinfo"
 	"github.com/gumpcome/nsq/internal/http_api"
 	"github.com/gumpcome/nsq/internal/test"
+	"github.com/nsqio/go-nsq"
 )
 
 const (

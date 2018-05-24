@@ -9,10 +9,10 @@ import (
 	"syscall"
 
 	"github.com/BurntSushi/toml"
-	"github.com/judwhite/go-svc/svc"
-	"github.com/mreiferson/go-options"
 	"github.com/gumpcome/nsq/internal/version"
 	"github.com/gumpcome/nsq/nsqlookupd"
+	"github.com/judwhite/go-svc/svc"
+	"github.com/mreiferson/go-options"
 )
 
 func nsqlookupdFlagSet(opts *nsqlookupd.Options) *flag.FlagSet {

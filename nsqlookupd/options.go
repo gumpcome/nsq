@@ -8,8 +8,9 @@ import (
 	"github.com/gumpcome/nsq/internal/lg"
 )
 
+//启动lookup的配置
 type Options struct {
-	LogLevel  string `flag:"log-level"`
+	LogLevel  string `flag:"log-level"` //日志等级
 	LogPrefix string `flag:"log-prefix"`
 	Verbose   bool   `flag:"verbose"` // for backwards compatibility
 	Logger    Logger

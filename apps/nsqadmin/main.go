@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/mreiferson/go-options"
 	"github.com/gumpcome/nsq/internal/app"
 	"github.com/gumpcome/nsq/internal/version"
 	"github.com/gumpcome/nsq/nsqadmin"
+	"github.com/mreiferson/go-options"
 )
 
 var (
