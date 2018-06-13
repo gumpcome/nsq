@@ -173,15 +173,15 @@ func (p *protocolV2) Exec(client *clientV2, params [][]byte) ([]byte, error) {
 	}
 	switch {
 	case bytes.Equal(params[0], []byte("FIN")):
-		return p.FIN(client, params)
+		return p.FIN(client, params) //消息处理完成
 	case bytes.Equal(params[0], []byte("RDY")):
 		return p.RDY(client, params)
 	case bytes.Equal(params[0], []byte("REQ")):
-		return p.REQ(client, params)
+		return p.REQ(client, params) //重新排队
 	case bytes.Equal(params[0], []byte("PUB")):
-		return p.PUB(client, params)
+		return p.PUB(client, params) //发送消息
 	case bytes.Equal(params[0], []byte("MPUB")):
-		return p.MPUB(client, params)
+		return p.MPUB(client, params) //批量发送消息
 	case bytes.Equal(params[0], []byte("DPUB")):
 		return p.DPUB(client, params)
 	case bytes.Equal(params[0], []byte("NOP")):
@@ -189,7 +189,7 @@ func (p *protocolV2) Exec(client *clientV2, params [][]byte) ([]byte, error) {
 	case bytes.Equal(params[0], []byte("TOUCH")):
 		return p.TOUCH(client, params)
 	case bytes.Equal(params[0], []byte("SUB")):
-		return p.SUB(client, params)
+		return p.SUB(client, params) //推送topic和channel
 	case bytes.Equal(params[0], []byte("CLS")):
 		return p.CLS(client, params)
 	case bytes.Equal(params[0], []byte("AUTH")):

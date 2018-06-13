@@ -37,7 +37,7 @@ func (p *LookupProtocolV1) IOLoop(conn net.Conn) error {
 		params := strings.Split(line, " ")
 
 		var response []byte
-		response, err = p.Exec(client, reader, params)
+		response, err = p.Exec(client, reader, params) //处理消息执行相应的操作
 		if err != nil {
 			ctx := ""
 			if parentErr := err.(protocol.ChildErr).Parent(); parentErr != nil {

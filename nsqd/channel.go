@@ -113,7 +113,7 @@ func NewChannel(topicName string, channelName string, ctx *context,
 		)
 	}
 
-	c.ctx.nsqd.Notify(c)
+	c.ctx.nsqd.Notify(c) //通知nsqlookup注册该channel
 
 	return c
 }

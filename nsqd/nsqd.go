@@ -265,8 +265,8 @@ func (n *NSQD) Main() {
 		http_api.Serve(n.httpListener, httpServer, "HTTP", n.logf)
 	})
 
-	n.waitGroup.Wrap(func() { n.queueScanLoop() })
-	n.waitGroup.Wrap(func() { n.lookupLoop() })
+	n.waitGroup.Wrap(func() { n.queueScanLoop() }) //主要用来清理过期消息
+	n.waitGroup.Wrap(func() { n.lookupLoop() })    //用于跟nsqlookup交互
 	if n.getOpts().StatsdAddress != "" {
 		n.waitGroup.Wrap(func() { n.statsdLoop() })
 	}
